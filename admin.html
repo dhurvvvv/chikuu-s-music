@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CHIKU'S PLAY — Admin Dashboard</title>
+  <meta name="description" content="CHIKU'S PLAY administration dashboard for managing music catalog, tracks, artists, and playlists.">
+  <meta name="theme-color" content="#121212">
+
+  <link rel="icon" type="image/svg+xml" href="assets/icons/logo.svg?v=cp-1">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32x32.png?v=cp-1">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16x16.png?v=cp-1">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=cp-1">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-page">
+
+  <main class="admin-shell">
+    <header class="admin-header">
+      <a href="index.html" class="admin-brand">CHIKU'S PLAY</a>
+      <div class="admin-header-right">
+        <span id="admin-user">Checking account…</span>
+        <button id="admin-signout" class="admin-button secondary" hidden>
+          Sign out
+        </button>
+      </div>
+    </header>
+
+    <div id="admin-status" class="admin-message" role="status">
+      Checking administrator authorization…
+    </div>
+
+    <section id="admin-content" hidden>
+      <div class="admin-heading">
+        <div>
+          <p class="admin-eyebrow">CONTROL CENTER</p>
+          <h1>Admin Dashboard</h1>
+          <p>Manage your CHIKU'S PLAY music catalog.</p>
+        </div>
+        <a href="index.html" class="admin-button secondary">View website</a>
+      </div>
+
+      <section class="admin-stats">
+        <article class="stat-card">
+          <span>Total tracks</span>
+          <strong id="stat-tracks">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Published tracks</span>
+          <strong id="stat-published">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Artists</span>
+          <strong id="stat-artists">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Albums</span>
+          <strong id="stat-albums">0</strong>
+        </article>
+      </section>
+
+      <section class="admin-panel">
+        <div class="admin-toolbar">
+          <div class="admin-tabs" role="tablist">
+            <button class="admin-tab active" data-tab="overview">Overview</button>
+            <button class="admin-tab" data-tab="tracks">Tracks</button>
+            <button class="admin-tab" data-tab="artists">Artists</button>
+            <button class="admin-tab" data-tab="albums">Albums</button>
+          </div>
+
+          <div class="admin-toolbar-actions">
+            <input
+              id="admin-search"
+              type="search"
+              placeholder="Search catalog…"
+              aria-label="Search catalog"
+            >
+            <button id="add-track-button" class="admin-button" hidden>
+              + Add Track
+            </button>
+            <button id="add-artist-button" class="admin-button" hidden>
+              + Add Artist
+            </button>
+            <button id="add-album-button" class="admin-button" hidden>
+              + Add Album
+            </button>
+          </div>
+        </div>
+
+        <div id="admin-view" aria-live="polite">
+          <p class="admin-loading">Loading your catalog…</p>
+        </div>
+      </section>
+    </section>
+
+    <!-- Add / Edit Track Dialog -->
+    <div id="track-modal" class="track-modal" hidden>
+      <div class="track-modal-card" role="dialog"
+           aria-modal="true" aria-labelledby="track-modal-title">
+
+        <div class="track-modal-heading">
+          <div>
+            <p class="admin-eyebrow">MUSIC LIBRARY</p>
+            <h2 id="track-modal-title">Add New Track</h2>
+          </div>
+          <button type="button" id="close-track-modal"
+                  class="modal-close" aria-label="Close">×</button>
+        </div>
+
+        <form id="track-form">
+          <input type="hidden" id="track-id">
+
+          <label class="admin-field">
+            Track title *
+            <input id="track-title" type="text" maxlength="180"
+                   placeholder="Enter track title" required>
+          </label>
+
+          <div class="admin-form-grid">
+            <label class="admin-field">
+              Artist *
+              <select id="track-artist" required>
+                <option value="">Select artist</option>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              Album
+              <select id="track-album">
+                <option value="">Single / No album</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="admin-form-grid">
+            <label class="admin-field">
+              Genre
+              <select id="track-genre">
+                <option value="">Select genre (optional)</option>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              Release date
+              <input id="track-release-date" type="date">
+            </label>
+          </div>
+
+          <label class="admin-field">
+            MP3 audio file *
+            <input id="track-audio" type="file"
+                   accept=".mp3,audio/mpeg">
+            <small id="audio-help">MP3 only · Maximum 50 MB</small>
+          </label>
+
+          <label class="admin-field">
+            Track cover image
+            <input id="track-cover" type="file"
+                   accept="image/jpeg,image/png,image/webp,image/avif">
+            <small>JPG, PNG, WEBP or AVIF · Maximum 5 MB</small>
+          </label>
+
+          <div id="audio-duration" class="admin-form-note">
+            Audio duration will be detected automatically.
+          </div>
+
+          <label class="admin-publish-option">
+            <input id="track-published" type="checkbox">
+            Publish this track on the public website
+          </label>
+
+          <p id="track-form-message" class="track-form-message"
+             role="status"></p>
+
+          <div class="track-modal-actions">
+            <button type="button" id="cancel-track"
+                    class="admin-button secondary">Cancel</button>
+            <button type="submit" id="save-track"
+                    class="admin-button">Save Track</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add / Edit Artist Dialog -->
+    <div id="artist-modal" class="track-modal" hidden>
+      <div class="track-modal-card" role="dialog"
+           aria-modal="true" aria-labelledby="artist-modal-title">
+
+        <div class="track-modal-heading">
+          <div>
+            <p class="admin-eyebrow">ARTIST DIRECTORY</p>
+            <h2 id="artist-modal-title">Add New Artist</h2>
+          </div>
+          <button type="button" id="close-artist-modal"
+                  class="modal-close" aria-label="Close artist form">×</button>
+        </div>
+
+        <form id="artist-form">
+          <input type="hidden" id="artist-id">
+
+          <label class="admin-field">
+            Artist name *
+            <input id="artist-name" type="text" maxlength="160"
+                   placeholder="Enter artist name" required>
+          </label>
+
+          <label class="admin-field">
+            Biography
+            <textarea id="artist-bio" rows="5" maxlength="4000"
+                      placeholder="Tell listeners about this artist"></textarea>
+          </label>
+
+          <label class="admin-field">
+            Profile image
+            <input id="artist-image" type="file"
+                   accept="image/jpeg,image/png,image/webp,image/avif">
+            <small>JPG, PNG, WEBP or AVIF · Maximum 5 MB</small>
+          </label>
+
+          <label class="admin-publish-option">
+            <input id="artist-published" type="checkbox">
+            Publish this artist on the public website
+          </label>
+
+          <p id="artist-form-message" class="track-form-message"
+             role="status"></p>
+
+          <div class="track-modal-actions">
+            <button type="button" id="cancel-artist"
+                    class="admin-button secondary">Cancel</button>
+            <button type="submit" id="save-artist"
+                    class="admin-button">Save Artist</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add / Edit Album Dialog -->
+    <div id="album-modal" class="track-modal" hidden>
+      <div class="track-modal-card" role="dialog"
+           aria-modal="true" aria-labelledby="album-modal-title">
+
+        <div class="track-modal-heading">
+          <div>
+            <p class="admin-eyebrow">ALBUM CATALOG</p>
+            <h2 id="album-modal-title">Add New Album</h2>
+          </div>
+          <button type="button" id="close-album-modal"
+                  class="modal-close" aria-label="Close album form">×</button>
+        </div>
+
+        <form id="album-form">
+          <input type="hidden" id="album-id">
+
+          <label class="admin-field">
+            Album title *
+            <input id="album-title" type="text" maxlength="200"
+                   placeholder="Enter album title" required>
+          </label>
+
+          <div class="admin-form-grid">
+            <label class="admin-field">
+              Artist *
+              <select id="album-artist" required>
+                <option value="">Select artist</option>
+              </select>
+            </label>
+
+            <label class="admin-field">
+              Release date
+              <input id="album-release-date" type="date">
+            </label>
+          </div>
+
+          <label class="admin-field">
+            Album cover image
+            <input id="album-cover" type="file"
+                   accept="image/jpeg,image/png,image/webp,image/avif">
+            <small>JPG, PNG, WEBP or AVIF · Maximum 5 MB</small>
+          </label>
+
+          <label class="admin-publish-option">
+            <input id="album-published" type="checkbox">
+            Publish this album on the public website
+          </label>
+
+          <p id="album-form-message" class="track-form-message"
+             role="status"></p>
+
+          <div class="track-modal-actions">
+            <button type="button" id="cancel-album"
+                    class="admin-button secondary">Cancel</button>
+            <button type="submit" id="save-album"
+                    class="admin-button">Save Album</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <section id="admin-denied" hidden class="admin-denied">
+      <h2>Access unavailable</h2>
+      <p id="admin-denied-message">
+        Administrator access is required.
+      </p>
+      <a href="index.html" class="admin-button">Return to website</a>
+    </section>
+
+    <footer class="admin-footer">
+      CHIKU'S PLAY · Your music. Your world.
+    </footer>
+  </main>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
