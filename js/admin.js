@@ -53,11 +53,29 @@ const MAX_AUDIO_SIZE = 50 * 1024 * 1024;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set([
   'image/jpeg',
+  'image/jpg',
+  'image/pjpeg',
   'image/png',
   'image/webp',
   'image/avif'
 ]);
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif']);
+
+const AUDIO_EXTENSIONS = new Set(['mp3']);
+const AUDIO_TYPES = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/x-mp3',
+  'audio/x-mpeg-3'
+]);
+
+function isAudioFile(file) {
+  if (!file || typeof file.name !== 'string') return false;
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  if (!AUDIO_EXTENSIONS.has(extension)) return false;
+  if (file.type && !AUDIO_TYPES.has(file.type)) return false;
+  return true;
+}
 
 const escapeHTML = value =>
   String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -297,10 +315,30 @@ function albumName(id) {
     || 'Single';
 }
 
+function filterTracks(items) {
+  const term = state.search.trim().toLowerCase();
+
+  if (!term) return items;
+
+  return items.filter(track => {
+    const title = String(track.title ?? '').toLowerCase();
+    const artist = String(artistName(track.artist_id) ?? '').toLowerCase();
+    const album = String(albumName(track.album_id) ?? '').toLowerCase();
+    const audioPath = String(track.audio_path ?? '').toLowerCase();
+
+    return (
+      title.includes(term) ||
+      artist.includes(term) ||
+      album.includes(term) ||
+      audioPath.includes(term)
+    );
+  });
+}
+
 // TRACK TABLE
 
-function renderTracks() {
-  const tracks = filtered(state.tracks, ['title', 'audio_path']);
+function renderTracks(tracksCollection = state.tracks) {
+  const tracks = filterTracks(tracksCollection);
 
   if (!tracks.length) {
     return `
@@ -502,7 +540,7 @@ function renderOverview() {
       <h3>Recently added tracks</h3>
 
       ${recent.length
-        ? renderTracks()
+        ? renderTracks(recent)
         : '<p class="admin-empty">No tracks available yet.</p>'}
     </div>
   `;
@@ -702,7 +740,18 @@ function showModal(track = null) {
   openDialog(modal, '#track-title');
 }
 
+let audioLoadToken = 0;
+let pendingAudioCleanup = null;
+
+function cleanupPendingAudioDetection() {
+  if (typeof pendingAudioCleanup === 'function') {
+    pendingAudioCleanup();
+    pendingAudioCleanup = null;
+  }
+}
+
 function closeModal() {
+  cleanupPendingAudioDetection();
   form.reset();
 
   state.editingId = null;
@@ -715,31 +764,67 @@ function closeModal() {
 $('#track-audio').addEventListener('change', event => {
   const file = event.target.files?.[0];
 
+  cleanupPendingAudioDetection();
   state.audioDuration = null;
 
-  if (!file) return;
+  if (!file) {
+    $('#audio-duration').textContent =
+      'Audio duration will be detected automatically.';
+    return;
+  }
 
-  if (!file.name.toLowerCase().endsWith('.mp3') ||
-      (file.type && file.type !== 'audio/mpeg')) {
+  if (!isAudioFile(file)) {
     setFormMessage('Please select a valid MP3 audio file.', true);
     event.target.value = '';
+    $('#audio-duration').textContent =
+      'Audio duration will be detected automatically.';
     return;
   }
 
   if (file.size > MAX_AUDIO_SIZE) {
     setFormMessage('MP3 file exceeds the 50 MB limit.', true);
     event.target.value = '';
+    $('#audio-duration').textContent =
+      'Audio duration will be detected automatically.';
     return;
   }
 
+  const thisToken = ++audioLoadToken;
+  $('#audio-duration').textContent = 'Detecting audio duration…';
+  setFormMessage('');
+
   const objectUrl = URL.createObjectURL(file);
   const audio = new Audio();
+  audio.preload = 'metadata';
 
-  audio.addEventListener('loadedmetadata', () => {
-    URL.revokeObjectURL(objectUrl);
+  let cleanedUp = false;
+  let timeoutId = null;
+
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    if (timeoutId) clearTimeout(timeoutId);
+    audio.removeEventListener('loadedmetadata', onLoaded);
+    audio.removeEventListener('error', onError);
+    audio.src = '';
+    try {
+      URL.revokeObjectURL(objectUrl);
+    } catch {}
+    if (pendingAudioCleanup === cleanup) {
+      pendingAudioCleanup = null;
+    }
+  };
+
+  pendingAudioCleanup = cleanup;
+
+  const onLoaded = () => {
+    if (thisToken !== audioLoadToken || cleanedUp) return;
+    cleanup();
 
     if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
-      setFormMessage('Could not read audio duration.', true);
+      state.audioDuration = null;
+      $('#audio-duration').textContent = 'Could not detect duration.';
+      setFormMessage('Could not read audio duration from this file.', true);
       return;
     }
 
@@ -749,16 +834,36 @@ $('#track-audio').addEventListener('change', event => {
       `Detected duration: ${duration(state.audioDuration)}`;
 
     setFormMessage('');
-  }, { once: true });
+  };
 
-  audio.addEventListener('error', () => {
-    URL.revokeObjectURL(objectUrl);
+  const onError = () => {
+    if (thisToken !== audioLoadToken || cleanedUp) return;
+    cleanup();
     state.audioDuration = null;
 
-    setFormMessage('Could not read this audio file.', true);
-  }, { once: true });
+    $('#audio-duration').textContent = 'Could not detect duration.';
+    setFormMessage('Could not read this audio file. Please choose a valid MP3 file.', true);
+  };
+
+  timeoutId = setTimeout(() => {
+    if (thisToken !== audioLoadToken || cleanedUp) return;
+    cleanup();
+    state.audioDuration = null;
+
+    $('#audio-duration').textContent = 'Duration detection timed out.';
+    setFormMessage(
+      'Audio duration detection timed out after 4 seconds. Please try selecting the file again.',
+      true
+    );
+  }, 4000);
+
+  audio.addEventListener('loadedmetadata', onLoaded, { once: true });
+  audio.addEventListener('error', onError, { once: true });
 
   audio.src = objectUrl;
+  try {
+    audio.load();
+  } catch {}
 });
 
 // COVER IMAGE VALIDATION
@@ -815,12 +920,24 @@ async function uploadAsset(bucket, file, folder = '') {
   const prefix = folder ? `${folder.replace(/[^a-z0-9-]/gi, '')}/` : '';
   const path = `${prefix}${crypto.randomUUID()}.${extension || 'bin'}`;
 
+  let contentType = file.type || '';
+  if (bucket === 'music' || isAudioFile(file)) {
+    contentType = 'audio/mpeg';
+  } else if (
+    contentType === 'image/jpg' ||
+    contentType === 'image/pjpeg' ||
+    extension === 'jpg' ||
+    extension === 'jpeg'
+  ) {
+    contentType = 'image/jpeg';
+  }
+
   const { error } = await state.db.storage
     .from(bucket)
     .upload(path, file, {
       cacheControl: '3600',
       upsert: false,
-      contentType: file.type
+      contentType: contentType || file.type || undefined
     });
 
   if (error) throw error;
@@ -935,6 +1052,16 @@ async function saveTrack(event) {
     return;
   }
 
+  if (audioFile && !isAudioFile(audioFile)) {
+    setFormMessage('Please select a valid MP3 file.', true);
+    return;
+  }
+
+  if (audioFile && audioFile.size > MAX_AUDIO_SIZE) {
+    setFormMessage('MP3 file exceeds the 50 MB limit.', true);
+    return;
+  }
+
   if (audioFile && !state.audioDuration) {
     setFormMessage(
       'Wait for the audio duration to be detected before saving.',
@@ -953,18 +1080,6 @@ async function saveTrack(event) {
       );
       return;
     }
-  }
-
-  if (audioFile &&
-      (!audioFile.name.toLowerCase().endsWith('.mp3') ||
-       (audioFile.type && audioFile.type !== 'audio/mpeg'))) {
-    setFormMessage('Please select a valid MP3 file.', true);
-    return;
-  }
-
-  if (audioFile && audioFile.size > MAX_AUDIO_SIZE) {
-    setFormMessage('MP3 file exceeds the 50 MB limit.', true);
-    return;
   }
 
   if (coverFile) {
@@ -1036,16 +1151,22 @@ async function saveTrack(event) {
       result = await state.db
         .from('tracks')
         .update(payload)
-        .eq('id', editingId);
+        .eq('id', editingId)
+        .select('id');
     } else {
       payload.duration_seconds = state.audioDuration;
 
       result = await state.db
         .from('tracks')
-        .insert(payload);
+        .insert(payload)
+        .select('id');
     }
 
     if (result.error) throw result.error;
+
+    if (!result.data?.length) {
+      throw new Error('No track was saved. Check administrator permissions.');
+    }
 
     databaseSaved = true;
 
@@ -1085,14 +1206,13 @@ async function saveTrack(event) {
   // Database save succeeded.
   closeModal();
 
-  alert(
-    wasEditing
-      ? 'Track updated successfully.'
-      : 'Track added successfully.'
-  );
-
   try {
     await loadData();
+    showSuccess(
+      wasEditing
+        ? 'Track updated successfully.'
+        : 'Track added successfully.'
+    );
   } catch (error) {
     console.error('Dashboard refresh failed:', error);
 
