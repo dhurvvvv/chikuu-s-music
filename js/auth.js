@@ -32,6 +32,41 @@ export async function signInWithGoogle(){
  if(error) throw error;
 }
 
+export async function signInWithPassword(email, password){
+ const cleanEmail=String(email??'').trim().toLowerCase();
+ const cleanPassword=String(password??'');
+ if(!cleanEmail||!cleanPassword){
+  throw new Error('Email and password are required.');
+ }
+ const db=await getSupabase();
+ const {data,error}=await db.auth.signInWithPassword({
+  email:cleanEmail,
+  password:cleanPassword
+ });
+ if(error) throw error;
+ return data;
+}
+
+export async function signUp(email, password){
+ const cleanEmail=String(email??'').trim().toLowerCase();
+ const cleanPassword=String(password??'');
+ if(!cleanEmail||!cleanPassword){
+  throw new Error('Email and password are required.');
+ }
+ if(cleanPassword.length<6){
+  throw new Error('Password must be at least 6 characters.');
+ }
+ const db=await getSupabase();
+ const redirectTo=`${location.origin}${location.pathname.replace(/[^/]*$/,'')}index.html`;
+ const {data,error}=await db.auth.signUp({
+  email:cleanEmail,
+  password:cleanPassword,
+  options:{emailRedirectTo:redirectTo}
+ });
+ if(error) throw error;
+ return data;
+}
+
 export async function signOut(){
  const db=await getSupabase();
  const {error}=await db.auth.signOut();

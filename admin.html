@@ -119,12 +119,25 @@
           </label>
 
           <div class="admin-form-grid">
-            <label class="admin-field">
-              Artist *
-              <select id="track-artist" required>
-                <option value="">Select artist</option>
-              </select>
-            </label>
+            <div class="admin-field">
+              <label for="track-artist">Artist *</label>
+              <div class="artist-select-action-row">
+                <select id="track-artist" required>
+                  <option value="">Select artist</option>
+                </select>
+                <button type="button" id="toggle-new-artist" class="admin-button secondary small" aria-expanded="false">+ New Artist</button>
+              </div>
+
+              <div id="inline-artist-box" class="inline-artist-box" hidden>
+                <div class="inline-artist-prompt">Create new artist:</div>
+                <div class="inline-artist-row">
+                  <input id="inline-artist-name" type="text" maxlength="120" placeholder="Enter artist name" aria-label="New artist name">
+                  <button type="button" id="add-inline-artist-btn" class="admin-button small">Add & Select</button>
+                  <button type="button" id="cancel-inline-artist-btn" class="admin-button secondary small">Cancel</button>
+                </div>
+                <small id="inline-artist-feedback" class="inline-artist-feedback" aria-live="polite"></small>
+              </div>
+            </div>
 
             <label class="admin-field">
               Album
@@ -162,8 +175,32 @@
             <small>JPG, PNG, WEBP or AVIF · Maximum 5 MB</small>
           </label>
 
-          <div id="audio-duration" class="admin-form-note">
-            Audio duration will be detected automatically.
+          <div class="audio-duration-wrap">
+            <div class="audio-duration-header">
+              <div id="audio-duration" class="admin-form-note audio-duration-badge">
+                Audio duration will be detected automatically.
+              </div>
+              <button type="button" id="toggle-manual-duration-btn" class="admin-button secondary small">
+                Enter duration manually
+              </button>
+            </div>
+
+            <div id="manual-duration-box" class="manual-duration-box" hidden>
+              <div class="manual-duration-prompt">Enter duration manually:</div>
+              <div class="manual-duration-inputs">
+                <label class="manual-duration-field">
+                  <input id="manual-duration-min" type="number" min="0" max="180" placeholder="MM" aria-label="Duration minutes">
+                  <span>min</span>
+                </label>
+                <span class="manual-colon">:</span>
+                <label class="manual-duration-field">
+                  <input id="manual-duration-sec" type="number" min="0" max="59" placeholder="SS" aria-label="Duration seconds">
+                  <span>sec</span>
+                </label>
+                <button type="button" id="apply-manual-duration-btn" class="admin-button small">Apply</button>
+              </div>
+              <small id="manual-duration-help">Minutes (0–180) and seconds (0–59).</small>
+            </div>
           </div>
 
           <label class="admin-publish-option">
@@ -313,6 +350,6 @@
     </footer>
   </main>
 
-  <script type="module" src="js/admin.js"></script>
+  <script type="module" src="js/admin.js?v=20261124-audio-artist-fix"></script>
 </body>
 </html>

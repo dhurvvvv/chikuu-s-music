@@ -664,6 +664,9 @@ export function createPlayer(songs = [], onChange, onPlayed) {
         return;
       }
       if (!element.src) return;
+      if (element.error?.code === 1 || (typeof MediaError !== 'undefined' && element.error?.code === MediaError.MEDIA_ERR_ABORTED)) {
+        return;
+      }
       state.loading = false;
       state.playing = false;
       state.error = 'Audio file could not be played.';
@@ -752,9 +755,6 @@ export function createPlayer(songs = [], onChange, onPlayed) {
 
     primaryAudio.src = url;
     loadedTrackId = id;
-    try {
-      primaryAudio.load();
-    } catch {}
 
     applyEffectiveVolume();
 
@@ -772,7 +772,13 @@ export function createPlayer(songs = [], onChange, onPlayed) {
       await primaryAudio.play();
     } catch (err) {
       if (token !== currentLoad) return;
-      if (err?.name === 'AbortError') return;
+      if (err?.name === 'AbortError') {
+        state.playing = !primaryAudio.paused;
+        state.loading = false;
+        onChange?.();
+        return;
+      }
+      state.loading = false;
       state.playing = false;
       state.error = err?.message || 'Playback was blocked by the browser.';
       onChange?.();
@@ -1214,7 +1220,12 @@ export function createPlayer(songs = [], onChange, onPlayed) {
         }
         state.playing = true;
         primaryAudio.play().catch(err => {
-          if (err?.name === 'AbortError') return;
+          if (err?.name === 'AbortError') {
+            state.playing = !primaryAudio.paused;
+            state.loading = false;
+            onChange?.();
+            return;
+          }
           state.playing = false;
           state.error = err?.message || 'Playback was blocked by the browser.';
           onChange?.();

@@ -557,7 +557,7 @@ function render() {
   });
 
   search.hidden = state.tab === 'overview';
-  addTrackButton.hidden = state.tab !== 'tracks';
+  addTrackButton.hidden = !(state.tab === 'tracks' || state.tab === 'overview');
   addArtistButton.hidden = state.tab !== 'artists';
   addAlbumButton.hidden = state.tab !== 'albums';
 
@@ -593,7 +593,8 @@ function populateSelectors(
       <option value="${escapeHTML(artist.id)}">
         ${escapeHTML(artist.name)}
       </option>
-    `).join('');
+    `).join('') +
+    '<option value="__new__">+ Add new artist…</option>';
 
   $('#track-genre').innerHTML =
     '<option value="">Select genre (optional)</option>' +
@@ -607,6 +608,208 @@ function populateSelectors(
   $('#track-genre').value = selectedGenre;
 
   updateAlbumOptions(selectedArtist, selectedAlbum);
+}
+
+// INLINE ARTIST CREATION
+
+function toggleInlineArtistBox(force) {
+  const box = $('#inline-artist-box');
+  const toggleBtn = $('#toggle-new-artist');
+  const nameInput = $('#inline-artist-name');
+  if (!box || !toggleBtn) return;
+
+  const shouldShow = typeof force === 'boolean' ? force : box.hidden;
+  box.hidden = !shouldShow;
+  toggleBtn.setAttribute('aria-expanded', String(shouldShow));
+
+  if (shouldShow) {
+    setInlineArtistFeedback('', false);
+    if (nameInput) {
+      window.requestAnimationFrame(() => nameInput.focus());
+    }
+  }
+}
+
+function closeInlineArtistBox() {
+  toggleInlineArtistBox(false);
+  const nameInput = $('#inline-artist-name');
+  if (nameInput) nameInput.value = '';
+  setInlineArtistFeedback('', false);
+}
+
+function resetInlineArtistBox() {
+  closeInlineArtistBox();
+}
+
+function setInlineArtistFeedback(message = '', isError = false) {
+  const feedback = $('#inline-artist-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.className = `inline-artist-feedback ${isError ? 'error' : message ? 'success' : ''}`.trim();
+}
+
+async function addInlineArtist() {
+  const nameInput = $('#inline-artist-name');
+  const addBtn = $('#add-inline-artist-btn');
+  const cancelBtn = $('#cancel-inline-artist-btn');
+
+  if (!nameInput) return null;
+
+  const rawName = nameInput.value || '';
+  const trimmedName = rawName.trim();
+
+  // 1. Validation: reject empty or whitespace-only names
+  if (!trimmedName) {
+    setInlineArtistFeedback('Please enter an artist name.', true);
+    nameInput.focus();
+    return null;
+  }
+
+  // 2. Duplicate prevention: case-insensitive check against existing artists
+  const normalized = trimmedName.toLowerCase();
+  const existingArtist = state.artists.find(
+    artist => (artist.name || '').trim().toLowerCase() === normalized
+  );
+
+  if (existingArtist) {
+    // Select existing artist instead of inserting a duplicate
+    $('#track-artist').value = existingArtist.id;
+    updateAlbumOptions(existingArtist.id);
+    closeInlineArtistBox();
+    setFormMessage(`Artist "${existingArtist.name}" already exists and was selected.`, false);
+    return existingArtist.id;
+  }
+
+  // Prevent duplicate submissions and disable controls while saving
+  if (addBtn) {
+    addBtn.disabled = true;
+    addBtn.textContent = 'Adding…';
+  }
+  if (cancelBtn) cancelBtn.disabled = true;
+  saveButton.disabled = true;
+  setInlineArtistFeedback('Adding artist…', false);
+
+  try {
+    const payload = {
+      name: trimmedName,
+      is_published: true
+    };
+
+    // Supabase insert with authenticated client, returning inserted record
+    const { data, error } = await state.db
+      .from('artists')
+      .insert(payload)
+      .select('id, name, bio, image_path, is_published, created_at')
+      .single();
+
+    if (error) throw error;
+    if (!data?.id) throw new Error('Failed to create artist.');
+
+    // Update state and UI without page reload
+    state.artists.unshift(data);
+
+    const statArtists = $('#stat-artists');
+    if (statArtists) {
+      statArtists.textContent = state.artists.length;
+    }
+
+    const currentAlbum = $('#track-album')?.value || '';
+    const currentGenre = $('#track-genre')?.value || '';
+    populateSelectors(data.id, currentAlbum, currentGenre);
+    populateAlbumArtistSelector(data.id);
+
+    closeInlineArtistBox();
+    setFormMessage(`Artist "${data.name}" added and selected.`, false);
+    return data.id;
+  } catch (err) {
+    console.error('Failed to create inline artist:', err);
+    setInlineArtistFeedback(err.message || 'Could not create artist.', true);
+    return null;
+  } finally {
+    if (addBtn) {
+      addBtn.disabled = false;
+      addBtn.textContent = 'Add';
+    }
+    if (cancelBtn) cancelBtn.disabled = false;
+    saveButton.disabled = false;
+  }
+}
+
+// MANUAL DURATION FALLBACK
+
+function toggleManualDuration(force) {
+  const box = $('#manual-duration-box');
+  const toggleBtn = $('#toggle-manual-duration-btn');
+  if (!box) return;
+
+  const shouldShow = typeof force === 'boolean' ? force : box.hidden;
+  box.hidden = !shouldShow;
+  if (toggleBtn) {
+    toggleBtn.textContent = shouldShow ? 'Hide manual duration' : 'Enter duration manually';
+  }
+  if (shouldShow) {
+    window.requestAnimationFrame(() => $('#manual-duration-min')?.focus());
+  }
+}
+
+function showManualDurationBox() {
+  toggleManualDuration(true);
+}
+
+function hideManualDurationBox() {
+  toggleManualDuration(false);
+}
+
+function resetManualDuration() {
+  hideManualDurationBox();
+  const minInput = $('#manual-duration-min');
+  const secInput = $('#manual-duration-sec');
+  if (minInput) minInput.value = '';
+  if (secInput) secInput.value = '';
+}
+
+function applyManualDuration() {
+  const minInput = $('#manual-duration-min');
+  const secInput = $('#manual-duration-sec');
+  const minRaw = minInput?.value.trim() ?? '';
+  const secRaw = secInput?.value.trim() ?? '';
+
+  if (minRaw === '' || secRaw === '') {
+    setFormMessage('Please enter both minutes (0–180) and seconds (0–59).', true);
+    return false;
+  }
+
+  if (!/^\d+$/.test(minRaw) || !/^\d+$/.test(secRaw)) {
+    setFormMessage('Minutes and seconds must be non-negative whole numbers.', true);
+    return false;
+  }
+
+  const mins = parseInt(minRaw, 10);
+  const secs = parseInt(secRaw, 10);
+
+  if (mins < 0 || mins > 180) {
+    setFormMessage('Minutes must be between 0 and 180.', true);
+    minInput?.focus();
+    return false;
+  }
+
+  if (secs < 0 || secs > 59) {
+    setFormMessage('Seconds must be between 0 and 59.', true);
+    secInput?.focus();
+    return false;
+  }
+
+  const totalSeconds = (mins * 60) + secs;
+
+  if (totalSeconds <= 0) {
+    setFormMessage('Total audio duration must be greater than zero.', true);
+    return false;
+  }
+
+  state.audioDuration = totalSeconds;
+  $('#audio-duration').textContent = `Duration: ${duration(totalSeconds)} (manual)`;
+  setFormMessage('');
+  return true;
 }
 
 function updateAlbumOptions(artistId, selectedAlbum = '') {
@@ -703,6 +906,8 @@ function closeAlbumModal() {
 
 function showModal(track = null) {
   form.reset();
+  resetInlineArtistBox();
+  resetManualDuration();
 
   state.audioDuration = null;
   state.editingId = track?.id || null;
@@ -752,6 +957,8 @@ function cleanupPendingAudioDetection() {
 
 function closeModal() {
   cleanupPendingAudioDetection();
+  resetInlineArtistBox();
+  resetManualDuration();
   form.reset();
 
   state.editingId = null;
@@ -766,6 +973,7 @@ $('#track-audio').addEventListener('change', event => {
 
   cleanupPendingAudioDetection();
   state.audioDuration = null;
+  resetManualDuration();
 
   if (!file) {
     $('#audio-duration').textContent =
@@ -804,7 +1012,10 @@ $('#track-audio').addEventListener('change', event => {
     if (cleanedUp) return;
     cleanedUp = true;
     if (timeoutId) clearTimeout(timeoutId);
-    audio.removeEventListener('loadedmetadata', onLoaded);
+    audio.removeEventListener('loadedmetadata', onAudioEvent);
+    audio.removeEventListener('durationchange', onAudioEvent);
+    audio.removeEventListener('canplay', onAudioEvent);
+    audio.removeEventListener('loadeddata', onAudioEvent);
     audio.removeEventListener('error', onError);
     audio.src = '';
     try {
@@ -817,23 +1028,26 @@ $('#track-audio').addEventListener('change', event => {
 
   pendingAudioCleanup = cleanup;
 
-  const onLoaded = () => {
-    if (thisToken !== audioLoadToken || cleanedUp) return;
-    cleanup();
+  const tryResolveDuration = () => {
+    if (thisToken !== audioLoadToken || cleanedUp) return false;
 
-    if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
-      state.audioDuration = null;
-      $('#audio-duration').textContent = 'Could not detect duration.';
-      setFormMessage('Could not read audio duration from this file.', true);
-      return;
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      state.audioDuration = Math.round(audio.duration);
+      cleanup();
+
+      $('#audio-duration').textContent =
+        `Detected duration: ${duration(state.audioDuration)}`;
+
+      hideManualDurationBox();
+      setFormMessage('');
+      return true;
     }
 
-    state.audioDuration = Math.round(audio.duration);
+    return false;
+  };
 
-    $('#audio-duration').textContent =
-      `Detected duration: ${duration(state.audioDuration)}`;
-
-    setFormMessage('');
+  const onAudioEvent = () => {
+    tryResolveDuration();
   };
 
   const onError = () => {
@@ -841,29 +1055,42 @@ $('#track-audio').addEventListener('change', event => {
     cleanup();
     state.audioDuration = null;
 
-    $('#audio-duration').textContent = 'Could not detect duration.';
-    setFormMessage('Could not read this audio file. Please choose a valid MP3 file.', true);
+    $('#audio-duration').textContent = 'Could not detect duration automatically.';
+    setFormMessage(
+      'Could not read audio duration from this file. Please enter minutes and seconds manually below.',
+      true
+    );
+    showManualDurationBox();
   };
 
   timeoutId = setTimeout(() => {
     if (thisToken !== audioLoadToken || cleanedUp) return;
+
+    if (tryResolveDuration()) return;
+
     cleanup();
     state.audioDuration = null;
 
-    $('#audio-duration').textContent = 'Duration detection timed out.';
+    $('#audio-duration').textContent = 'Audio duration detection timed out.';
     setFormMessage(
-      'Audio duration detection timed out after 4 seconds. Please try selecting the file again.',
+      'Audio duration detection timed out after 8 seconds. Please enter the duration manually below.',
       true
     );
-  }, 4000);
+    showManualDurationBox();
+  }, 8000);
 
-  audio.addEventListener('loadedmetadata', onLoaded, { once: true });
-  audio.addEventListener('error', onError, { once: true });
+  audio.addEventListener('loadedmetadata', onAudioEvent);
+  audio.addEventListener('durationchange', onAudioEvent);
+  audio.addEventListener('canplay', onAudioEvent);
+  audio.addEventListener('loadeddata', onAudioEvent);
+  audio.addEventListener('error', onError);
 
   audio.src = objectUrl;
   try {
     audio.load();
   } catch {}
+
+  tryResolveDuration();
 });
 
 // COVER IMAGE VALIDATION
@@ -1028,7 +1255,17 @@ async function saveTrack(event) {
   if (saveButton.disabled) return;
 
   const title = $('#track-title').value.trim();
-  const artistId = $('#track-artist').value;
+  let artistId = $('#track-artist').value;
+
+  // Auto-resolve inline artist if user typed an artist name without clicking Add
+  const inlineArtistInput = $('#inline-artist-name');
+  if (!artistId && inlineArtistInput && inlineArtistInput.value.trim()) {
+    artistId = await addInlineArtist();
+    if (!artistId) {
+      return;
+    }
+  }
+
   const albumId = $('#track-album').value || null;
   const genreId = $('#track-genre').value || null;
 
@@ -1063,10 +1300,22 @@ async function saveTrack(event) {
   }
 
   if (audioFile && !state.audioDuration) {
+    const minInput = $('#manual-duration-min');
+    const secInput = $('#manual-duration-sec');
+    if (minInput && secInput && (minInput.value.trim() !== '' || secInput.value.trim() !== '')) {
+      const applied = applyManualDuration();
+      if (!applied) {
+        return;
+      }
+    }
+  }
+
+  if (audioFile && !state.audioDuration) {
     setFormMessage(
-      'Wait for the audio duration to be detected before saving.',
+      'Wait for audio duration detection or enter the duration manually in minutes and seconds.',
       true
     );
+    showManualDurationBox();
     return;
   }
 
@@ -1541,10 +1790,67 @@ document.addEventListener('keydown', event => {
   else if (!albumModal.hidden) closeAlbumModal();
 });
 
-// ARTIST CHANGE
+// ARTIST CHANGE & INLINE CREATION
 
 $('#track-artist').addEventListener('change', event => {
+  if (event.target.value === '__new__') {
+    event.target.value = '';
+    toggleInlineArtistBox(true);
+    return;
+  }
   updateAlbumOptions(event.target.value);
+});
+
+$('#toggle-new-artist')?.addEventListener('click', () => {
+  toggleInlineArtistBox();
+});
+
+$('#add-inline-artist-btn')?.addEventListener('click', event => {
+  event.preventDefault();
+  addInlineArtist();
+});
+
+$('#cancel-inline-artist-btn')?.addEventListener('click', event => {
+  event.preventDefault();
+  closeInlineArtistBox();
+  $('#track-artist')?.focus();
+});
+
+$('#inline-artist-name')?.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    event.stopPropagation();
+    addInlineArtist();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeInlineArtistBox();
+    $('#track-artist')?.focus();
+  }
+});
+
+// MANUAL DURATION CONTROLS
+
+$('#toggle-manual-duration-btn')?.addEventListener('click', () => {
+  toggleManualDuration();
+});
+
+$('#apply-manual-duration-btn')?.addEventListener('click', () => {
+  applyManualDuration();
+});
+
+$('#manual-duration-min')?.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    applyManualDuration();
+  }
+});
+
+$('#manual-duration-sec')?.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    applyManualDuration();
+  }
 });
 async function deleteTrack(trackId, button) {
   if (!trackId) {
