@@ -1,10 +1,24 @@
 
+html.admin-html,
+body.admin-page {
+  height: auto !important;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  background: #101210 !important;
+  color: #f3f5f1 !important;
+}
+
 .admin-page {
   min-height: 100vh;
+  min-height: 100dvh;
   background: #101210;
   color: #f3f5f1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
 }
 
 .admin-shell {
@@ -277,9 +291,19 @@
 }
 
 @media (max-width: 760px) {
+  html.admin-html,
+  body.admin-page {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: auto !important;
+    min-height: 100dvh !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
   .admin-shell {
     width: calc(100% - 24px);
     padding-top: 14px;
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .admin-stats {
@@ -783,11 +807,17 @@ body.modal-open {
 
   .track-modal {
     padding: 8px;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
   .track-modal-card {
     padding: 18px;
-    max-height: 96vh;
+    max-height: calc(100dvh - 24px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin: auto 0;
   }
 
   .artist-select-action-row {
