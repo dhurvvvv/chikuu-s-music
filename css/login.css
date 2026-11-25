@@ -229,3 +229,50 @@
   font-size: 11px;
   margin-top: 20px;
 }
+
+.google-icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.login-trust-footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.trust-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.trust-link {
+  color: var(--muted, #a0a69d);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.trust-link:hover {
+  color: #f3f5f1;
+}
+
+.trust-sep {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+  margin: 0 4px;
+  user-select: none;
+}
+
+.trust-disclaimer {
+  font-size: 11px;
+  color: #7a8276;
+  line-height: 1.45;
+  margin: 0;
+  text-align: center;
+}
